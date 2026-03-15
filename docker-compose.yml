@@ -1,0 +1,23 @@
+name: "flexopus-auto-parking"
+
+services:
+  booking-niklas:
+    image: "ghcr.io/nimarion/flexopus:main"
+    restart: "no"
+    environment:
+      - FLEXOPUS_COOKIE_FILE=/home/nmarion/cookies.pkl
+    env_file:
+      - /home/nmarion/.flexopus-env
+    volumes:
+      - "/home/nmarion/cookies.pkl:/cookies.pkl"
+    command: ["--prefered-parking-spaces 'Parking 54'"]
+  booking-max:
+    image: "ghcr.io/nimarion/flexopus:main"
+    restart: "no"
+    environment:
+      - FLEXOPUS_COOKIE_FILE=/home/mmustermann/cookies.pkl
+    env_file:
+      - /home/mmustermann/.flexopus-env
+    volumes:
+      - "/home/mmustermann/cookies.pkl:/cookies.pkl"
+    command: ["--prefered-parking-spaces 'Parking 66' 'Parking 32'"]
