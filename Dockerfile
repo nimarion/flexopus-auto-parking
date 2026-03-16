@@ -2,4 +2,4 @@ FROM python:3.14
 WORKDIR /usr/src/app
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-ENTRYPOINT [ "python", "/usr/src/app", "main.py" ]
+ENTRYPOINT [ "python", "main.py" ]
