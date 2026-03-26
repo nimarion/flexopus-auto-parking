@@ -28,6 +28,9 @@ def parse_bookings(client: FlexopusClient, user_id: str):
     parking_bookings = []
 
     for booking in bookings:
+        if booking["external_user_id"] is not None:
+            continue
+        
         bookable = booking["bookable"]
         bookable_type = bookable["type"]
         
