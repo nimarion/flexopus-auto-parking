@@ -289,7 +289,7 @@ if __name__ == "__main__":
 
         print(f"Using building: {building['name']} (ID: {building['id']})")
 
-        target_date = (datetime.now() + timedelta(13)).date()
+        target_date = (datetime.now() + timedelta(14)).date()
         already_booked = any(desk["from_time"].date() == target_date for desk in desk_bookings)
         if already_booked:
             print(f"A desk is already booked for {target_date}. Skipping preferred desk booking.")
