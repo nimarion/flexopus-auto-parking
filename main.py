@@ -4,6 +4,41 @@ from datetime import datetime, timedelta, timezone, time
 from argparse import ArgumentParser
 import requests
 from collections import Counter
+from typing import Optional
+
+class RobustFlexopusClient(FlexopusClient):
+    """
+    Subclass of FlexopusClient that generically handles 401 Unauthorized errors
+    by clearing stale/expired cookies, deleting the cookie file, and retrying
+    with the fresh API token.
+    """
+    def __init__(self, base_host: str, api_token: str, *args, **kwargs):
+        self._api_token = api_token
+        self._base_host = base_host
+        super().__init__(base_host, api_token, *args, **kwargs)
+
+    def _request(self, method: str, endpoint: str, *args, **kwargs):
+        try:
+            return super()._request(method, endpoint, *args, **kwargs)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401 and self._cookie_file:
+                print("Session cookie expired or unauthorized (401). Clearing cookies and retrying with token...")
+                self.session.cookies.clear()
+                if os.path.exists(self._cookie_file):
+                    try:
+                        os.remove(self._cookie_file)
+                    except Exception as ex:
+                        print(f"Could not remove expired cookie file: {ex}")
+                if self._api_token:
+                    self.session.cookies.set(
+                        "flexopus_session",
+                        self._api_token,
+                        domain=self._base_host
+                    )
+                # Retry the request once
+                return super()._request(method, endpoint, *args, **kwargs)
+            raise
+
 
 def get_user_vehicle(client: FlexopusClient):
     user = client.getSelfUser()["data"]
@@ -274,7 +309,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    client = FlexopusClient(args.host, args.token, cookie_file=args.cookie_file)
+    client = RobustFlexopusClient(args.host, args.token, cookie_file=args.cookie_file)
     user_id, vehicle = get_user_vehicle(client)
     desk_bookings, parking_bookings = parse_bookings(client, user_id)
 
