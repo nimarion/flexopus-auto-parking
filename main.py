@@ -121,40 +121,62 @@ def has_parking_for_desk(desk, parking_bookings):
 
 
 def book_parking(client, desk, vehicle_id, prefered_parking_spaces: list[str] = []):
-    free_space = helper.getPreferedFreeParkingSpace(
-        client,
-        desk["building_id"],
-        desk["from_time"],
-        desk["to_time"],
-        prefered_parking_spaces,
-    )
-
-    if not free_space:
-        print(f"-> No free parking space found for desk booking {desk['id']}")
-        return
-
-    try:
-        client.createBooking(
-            location_id=free_space["location_id"],
-            bookable_id=free_space["id"],
-            from_time=desk["from_time"],
-            to_time=desk["to_time"],
-            user_vehicle_id=vehicle_id,
+    excluded_space_ids = set()
+    max_retries = 5
+    
+    for attempt in range(max_retries):
+        free_space = helper.getPreferedFreeParkingSpace(
+            client,
+            desk["building_id"],
+            desk["from_time"],
+            desk["to_time"],
+            prefered_parking_spaces,
+            excluded_space_ids=excluded_space_ids
         )
 
-        print(
-            f"-> Booked parking space {free_space['id']} for desk booking {desk['id']}"
-        )
-    except requests.exceptions.HTTPError as e:
-        # 422 -> 12:00 Uhr DG Limit noch nicht erfüllt
-        if e.response.status_code >= 400 and e.response.status_code < 500:
-            print(f"-> Failed to book parking space {free_space['id']} for desk booking {desk['id']}: {e.response.json()['message']}")
-        else:
-            print(f"-> Failed to book parking space {free_space['id']} for desk booking {desk['id']}: {e}")
-    except Exception as e:
-        print(
-            f"-> Failed to book parking space {free_space['id']} for desk booking {desk['id']}: {e}"
-        )
+        if not free_space:
+            print(f"-> No free parking space found for desk booking {desk['id']}")
+            return
+
+        try:
+            client.createBooking(
+                location_id=free_space["location_id"],
+                bookable_id=free_space["id"],
+                from_time=desk["from_time"],
+                to_time=desk["to_time"],
+                user_vehicle_id=vehicle_id,
+            )
+
+            print(
+                f"-> Booked parking space '{free_space['name']}' ({free_space['id']}) for desk booking {desk['id']}"
+            )
+            return
+        except requests.exceptions.HTTPError as e:
+            is_already_booked = False
+            error_message = ""
+            if e.response is not None and e.response.status_code >= 400 and e.response.status_code < 500:
+                try:
+                    error_message = e.response.json().get('message', '')
+                    if "bereits gebucht" in error_message or "already booked" in error_message.lower():
+                        is_already_booked = True
+                except Exception:
+                    pass
+            
+            if is_already_booked:
+                print(f"-> Parking space '{free_space['name']}' ({free_space['id']}) was already booked by someone else (race condition). Retrying with another space...")
+                excluded_space_ids.add(free_space["id"])
+                continue
+            else:
+                msg = error_message if error_message else str(e)
+                print(f"-> Failed to book parking space '{free_space['name']}' ({free_space['id']}) for desk booking {desk['id']}: {msg}")
+                return
+        except Exception as e:
+            print(
+                f"-> Failed to book parking space '{free_space['name']}' ({free_space['id']}) for desk booking {desk['id']}: {e}"
+            )
+            return
+
+    print(f"-> Exceeded maximum retries ({max_retries}) for desk booking {desk['id']}")
 
 
 def process_desk_bookings(client, desk_bookings, parking_bookings, vehicle_id, prefered_parking_spaces: list[str] = []):
@@ -335,11 +357,10 @@ if __name__ == "__main__":
             if success:
                 desk_bookings, parking_bookings = parse_bookings(client, user_id)
 
-    if args.prefered_parking_spaces:
-        process_desk_bookings(
-            client,
-            desk_bookings,
-            parking_bookings,
-            vehicle["id"],
-            args.prefered_parking_spaces
-        )
+    process_desk_bookings(
+        client,
+        desk_bookings,
+        parking_bookings,
+        vehicle["id"],
+        args.prefered_parking_spaces
+    )
