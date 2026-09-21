@@ -1,1 +1,1 @@
-flexopus @ git+https://github.com/nimarion/flexopus@3a67bea
+flexopus @ git+https://github.com/nimarion/flexopus@fd35268
